@@ -1,0 +1,22 @@
+# Batch data pipelines
+
+A batch data pipeline processes large amounts of data at specific times or in groups, like data in a file or in a collection of files, rather than continuously, like data that is real-time.
+
+## Parts
+
+- Data sources: Every pipeline begins with data sources. These are the origins of your raw data, which can come in various formats (e.g., CSV, JSON, database tables, log files).
+
+- Data ingestion: The first stage of the pipeline is data ingestion. This is the process of acquiring raw data from its sources and transferring it into a central, temporary storage area, often called a 'landing zone' or 'staging area.'  This process is frequently automated and the data is often directly transformed and landed in the final sink.
+
+- Data transformation: Ingested data may be cleaned, validated, enriched, mapped, and/or restructured into a consistent and standardized format, before landing in the destination sink. This stage can involve various processing steps, such as filtering out irrelevant data, aggregating information, joining data from different sources, mapping, or applying business logic.
+
+- Data sink: Throughout the pipeline, data needs to be stored. This includes:
+  - Intermediate storage: Often part of the ingestion or transformation stages, this holds data temporarily as it moves through the pipeline (e.g., the landing zone in Cloud Storage).
+  - Final storage: After transformation, the clean, structured data is loaded into a destination optimized for its intended use. The final destination is frequently a data warehouse (like BigQuery), a data lake (like Cloud Storage with formats like Apache Iceberg), or other analytical data stores.
+
+- Downstream uses: While not part of the pipeline, this step is about the downstream uses of the processed data. The value of the pipeline is realized when it is consumed by various applications and appropriate stakeholders.
+
+- Orchestrate and monitor: Orchestration and monitoring are essential components that wrap around the entire pipeline.
+  - Orchestration involves scheduling, managing, and coordinating the various tasks within the pipeline, ensuring they run in the correct order and handle dependencies.
+  - Monitoring: This involves tracking the health, performance, and data quality of the pipeline, alerting on errors, and ensuring data integrity.
+  
