@@ -150,3 +150,133 @@ For streaming jobs that do use Streaming Engine, the --max_num_workers flag is o
 
 ## Security 
 
+### Data locality
+
+When you launch a Dataflow job:
+
+- Backend location: A Google-managed backend deploys and controls your pipeline. This backend exists in specific regions and may differ from where your workers run.
+- Service account communication: The Dataflow service account (discussed in these notes) communicates between your project and the Dataflow backend.
+
+What Metadata is Transferred?
+The regional endpoint receives metadata, not your application data:
+- Health checks from workers
+- Work item requests/responses
+- Worker status updates
+- Autoscaling events
+...
+
+Why Specify a Regional Endpoint?
+
+- Security and compliance:
+Some regulations require data to stay within a country/region
+Example: Banks in certain countries must keep data within the country
+Specifying a regional endpoint helps meet these requirements
+
+- Minimize latency and costs:
+If your pipeline sources, sinks, and staging locations are all in the same region, you avoid network egress charges
+Example: If workers are in northamerica-northeast1 but the regional endpoint is us-central1, you'll pay for metadata transfer between regions
+
+**Important Notes**
+
+- Application data stays local: Even if the regional endpoint is in a different region, your application data remains in the worker region. Only metadata is transferred.
+- Cost implications: Cross-region metadata transfer incurs network egress charges.
+- Compliance: If regulations require data to stay in a specific region, ensure workers run in that region. The regional endpoint can be different, but only metadata crosses regions.
+
+Example Scenarios
+
+- Good (Same Region):
+  - Workers: us-central1-a
+  - Regional endpoint: us-central1
+  - Result: No cross-region charges, low latency
+
+- Acceptable (Different Regions):
+  - Workers: northamerica-northeast1
+  - Regional endpoint: us-central1 (closest supported endpoint)
+  - Result: Application data stays in Canada, metadata crosses regions (small cost/latency)
+
+- Compliance Example:
+  - Requirement: Data must stay in Germany
+  - Workers: europe-west3 (Frankfurt)
+  - Regional endpoint: europe-west1 (Belgium) - closest supported endpoint
+  - Result: Application data stays in Germany; only metadata goes to Belgium
+
+
+### Shared VPCs
+
+Shared VPC allows Dataflow to run in a network from a different project (host project), enabling centralized network management while teams manage their own resources.
+
+- Key points:
+  - Host project contains the network; service project uses it
+  - Can use default or custom networks
+  - Plan subnet size based on worker count
+  - Dataflow service account needs Compute Network User role
+  - Can grant at project-level (flexible) or subnet-level (more secure)
+
+- Best practices:
+  - Use custom networks for production
+  - Grant permissions at subnet-level for better security
+  - Plan IP addresses carefully based on max_num_workers
+  - Ensure firewall rules allow necessary communication
+
+### Private IPs
+
+Disabling external IP usage means Dataflow workers only get private IP addresses (no public IPs). This blocks direct internet access and improves security.
+
+- Benefits
+
+  - Security:
+      Workers cannot access the internet directly
+      Reduces attack surface
+      Data processing stays within your private network
+      
+  - Quota savings:
+    Reduces consumption of the "in-use IP address" quota
+    Frees up public IPs for other resources
+    Important if you're near quota limits
+  
+  - Administrative access still works:
+    You can still perform admin and monitoring tasks
+    Dataflow UI and monitoring continue to work
+    Metadata and logs still flow to the regional endpoint
+  
+- Default Behavior
+    By default, Dataflow assigns workers both:
+      - Public IP address (external)
+      - Private IP address (internal)
+
+    This allows workers to:
+      - Access the internet
+      - Access Google Cloud APIs/services
+      - Communicate with other VPC resources
+
+- What Can Workers Access Without Public IPs?
+    When public IPs are disabled, workers can access:
+      - Instances in the same VPC network
+      - Resources in a Shared VPC network
+      - Resources in peered VPC networks (VPC peering)
+
+    They cannot directly access:
+      - The public internet
+      - External APIs/services
+      - Google Cloud APIs/services (unless Private Google Access is enabled)
+
+- Private Google Access - Critical Requirement
+
+If your pipeline needs to communicate with Google Cloud services (BigQuery, Cloud Storage, Pub/Sub, etc.) and you're using a custom network without public IPs, you must enable Private Google Access.
+
+What is Private Google Access?
+  - Allows VMs with only private IPs to reach Google Cloud APIs/services
+  - Routes traffic through Google's private network (not the public internet)
+  - Required for accessing: BigQuery, Cloud Storage, Pub/Sub, Dataflow services, etc.
+
+What happens without Private Google Access?
+  - Workers cannot reach Google Cloud APIs/services
+  - Pipeline will fail if it needs to access these services
+  - Exception: If you have Cloud NAT configured, that can provide internet access
+    Cloud NAT Alternative
+
+- Cloud NAT provides another way to access the internet:
+    - Allows VMs without public IPs to access the internet
+    - Provides outbound internet connectivity through NAT gateway
+    - Can be used instead of Private Google Access for general internet access
+    - Still recommended to enable Private Google Access for Google Cloud APIs (better performance)
