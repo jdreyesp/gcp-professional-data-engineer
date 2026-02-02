@@ -280,3 +280,29 @@ What happens without Private Google Access?
     - Provides outbound internet connectivity through NAT gateway
     - Can be used instead of Private Google Access for general internet access
     - Still recommended to enable Private Google Access for Google Cloud APIs (better performance)
+
+### CMEK (Customer managed encryption key)
+
+During a Dataflow job's lifecycle, different storage locations are used to store data. When a Dataflow job is created, a cloud storage bucket is used to store binary files containing pipeline code. A cloud storage bucket is also used to temporarily store export or import data.
+
+While the job is running, persistent disks attached to Dataflow workers are used for persistent disk-based shuffle and streaming state storage.
+
+If a batch job is using Dataflow Shuffle, the backend stores the batch pipeline state during execution.
+
+If a job is using Dataflow Streaming Engine, the backend stores the streaming pipeline state during execution.
+
+By default, when data is stored in any of these locations, a Google-managed key is used to encrypt the data.
+
+CMEK allows you to encrypt data at rest using one of your symmetric keys stored in Google Cloud key management system. This means that you can use CMEK in any of the data storage locations mentioned.
+
+When your pipeline starts and the data is loaded into the worker memory, data keys used in key-based operations, such as windowing, grouping, and joining, will be decrypted using your CMEK keys.
+
+For an additional layer of security, you can hash or transform the key.
+
+Job metadata is encrypted with Google encryption. Job metadata includes the following: user-supplied data, such as job names, job parameter values, and pipeline graphs, and system generated data, such as job IDs and IP addresses of workers.
+
+Using CMEK requires both the Dataflow service account and the Controller Agent service account to have the cloud KMS `CryptoKey Encrypter/Decrypter role`.
+
+To use CMEK, two flags need to be specified. First, specify the cloud storage path for Dataflow to stage temporary files created during the execution of the pipeline using the temp location flag. Second, specify the location of the key in Google's key management service using the Dataflow KMS key flag.
+
+When you launch a job that uses CMEK, the region for your key and the regional input for your Dataflow job must be the same. Global or multiregional keys will not work. The bucket selected to temporarily store data must also be in the same region as the key.
