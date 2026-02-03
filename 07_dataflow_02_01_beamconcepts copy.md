@@ -1,4 +1,4 @@
-# Dataflow: Develop pipelines
+# Dataflow: Develop pipelines - Beam concepts
 
 3 ways to launch a Dataflow pipeline:
 
