@@ -141,3 +141,129 @@ This architecture basically offers you zero downtime, even where we'll have mult
 Similarly, as your data is being processed in multiple regions, data loss is extremely unlikely.
 
 However, since you are duplicating resources across the entire stack, this approach is the most expensive high availability configuration.
+
+## Flex templates
+
+## Dataflow job
+
+In normal cases (without templates), when a developer executes a Beam pipeline, the SDK `stages all the pipeline dependencies on Google Cloud Storage` and `calls the Dataflow Jobs API to create a job by passing a job request object`. 
+
+To launch a pipeline, this workflow requires runtime dependencies to be installed, which can be challenging for non-technical users.
+
+This dependency also limits using cloud-native services like Cloud Scheduler for scheduling. 
+
+## Classic templates
+
+Dataflow templates enable the separation of the development activities and the execution activities. Development is done by a developer, that packs the runnable and all dependencies into the template, uploads it to GCS, and non-technical users can then execute the template that from that GCS locations.
+
+The initial version of templates are now referred to as `classic templates`. With classic templates, the developer stages the pipeline as a template file on Google Cloud Storage. Now users can launch the pipeline, referring to the template file without the need for any runtime dependencies.
+
+This new approach facilitates more opportunities for automation and reusability of pipelines across the teams.
+
+### Classic templates challenges
+
+- ValueProvider support for Beam I/O transforms
+
+The ValueProvider interface is the component used from templates to convert compile time parameters into runtime parameters. ValueProvider support has been added to multiple Google and non Google I/Os, but there are some open-source I/Os that lack ValueProvider support which means that pipelines developed using these I/Os cannot be converted to classic templates.
+
+- Lack of support of DAG (Direct Acyclic Graph)
+
+In classic templates, the pipeline graph gets built when the developer converts the pipeline into a template. Due to this, the shape of the graph cannot be changed based on user-provided options. So if your pipeline sinks to BigQuery or Cloud Storage depending dynamically on user's choice at runtime, this is not possible in Classic templates. In this case, you'd need to create 2 templates: one that sinks to Bigquery, and the other one that sinks to GCS.
+
+To address, this, Google has built:
+
+## Flex templates
+
+With flex templates, the pipeline developer packages the pipeline artifacts into Docker image and stages the image on Google Container Registry. In addition, the developer creates a metadata specification file on Cloud Storage. Users can launch a template referring to a metadata spec file stored on Cloud Storage by passing appropriate parameter values.
+
+Behind the scenes, the template launches service, reads the metadata spec file, downloads the Docker image, and invokes the pipeline using user-supplied values.
+
+It's important to note that with flex templates the job graph is generated when the end user launches the templates, whereas with classic templates, the graph is generated when the templates are created.
+
+This distinction makes flex templates more flexible than classic templates.
+
+## Using flex templates
+
+Turning a Dataflow pipeline into a flex template is easy and straightforward:
+
+1. Create a metadata file indicating the pipeline parameters
+2. Run the flex-template build `gcloud` command
+
+### Create a metadata file indicating the pipeline parameters
+
+```json
+{
+    "name": "PubSub To Bigquery",
+    "description": "An Apache Beam streaming pipeline that reads JSON encoded messages from Pub/Sub, and writes the results to a BigQuery",
+    "parameters": [
+        {
+            "name": "inputSubscription",
+            "label": "Pub/Sub input subscription.",
+            "helpText": "Pub/Sub subscription to read from.",
+            "regexes": ["[a-zA-Z][-_.~+%a-zA-Z0-9]{2,}"]
+        },
+        {
+            "name": "outputTable",
+            "label": "BigQuery output table",
+            "helpText": "BigQuery table spec to write to, in the form 'project:dataset.table'",
+            "regexes": [ "[^:]+:[^.]+[.].+"]
+        }
+    ]
+}
+```
+
+This fail-fast approach avoids the overhead of launching a job that may potentially fail due to incorrect parameter values.
+
+### Run the flex-template build `gcloud` command
+
+```sh
+gcloud dataflow flex-template build "$TEMPLATE_SPEC_PATH" \
+    --image-gcr-path "STEMPLATE_IMAGE" \
+    --sdk-language "JAVA" \
+    --flex-template-base-image JAVA8 \
+    --metadata-file "metadata.json" \
+    --jar "target/pubsub-bigquery-1.0.jar" \
+    --env FLEX_TEMPLATE_JAVA_MAIN_CLASS="com.google.cloud.PubSubBigquery"
+```
+
+Note: `Container Registry` is now `Artifact Registry`
+
+In this command, you will provide the paths to store the Docker image and template specification file.
+
+Launching a flex template can be done from Google Cloud Console, `gcloud`, REST API, and Cloud Scheduler.
+
+For example: 
+
+```sh
+gcloud dataflow flex-template run "job-name-`date +%Y%m%d-%H%M%S`" \
+    --template-file-gcs-location "$TEMPLATE_PATH" \
+    --parameters inputSubscripiton="$SUBSCRIPTION" \
+    --parameters outputTable="$PROJECT:$DATASET.$TABLE" \
+    --region "$REGION"
+```
+
+Flex templates can also be scheduled using the native Cloud Scheduler.
+
+Google recommends using flex templates for any Dataflow pipeline that you would like to reuse.
+
+## Google-provided templates
+
+Google readily provides a large collection of templates to Dataflow users.
+
+The good news is that you can use them without writing a single line of code.
+
+These templates can be used for transferring data between different systems. 
+
+You can also add simple transformations through a JavaScript user-defined function.
+
+Google has also open-sourced all the templates with the full code available on GitHub.
+
+This repository also serves as a starting point for Dataflow developers to learn best practices for writing and testing Beam pipelines.
+
+With active community support, we encourage you to contribute either new templates or enhancements to existing templates.
+
+Similar to user-developed templates, Google-provided templates can be launched through Console, gcloud, REST API, or Scheduler.
+
+You can create a job using one of the templates by clicking on Create job from template option on the Dataflow Jobs screen.
+
+Google-provided templates are classified into streaming, batch, and utility templates.
